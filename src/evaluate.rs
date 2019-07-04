@@ -86,7 +86,8 @@ impl Evaluator {
         // but results will be collected via the message queue
         let eval_send = self.eval_send.clone();
         rayon::spawn(move || {
-            let filters_iter = STD_FILTERS.par_iter().with_max_len(1);
+            let FILTERS: [u8; 1] = [0];
+            let filters_iter = FILTERS.par_iter().with_max_len(1);
 
             // Updating of best result inside the parallel loop would require locks,
             // which are dangerous to do in side Rayon's loop.
@@ -104,6 +105,7 @@ impl Evaluator {
                     &best_candidate_size,
                     &deadline,
                 ) {
+
                     best_candidate_size.set_min(idat_data.len());
                     // the rest is shipped to the evavluation/collection thread
                     eval_send
