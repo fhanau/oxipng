@@ -25,6 +25,8 @@ pub(crate) fn cfzlib_deflate(
     let mut stream = Deflate::new(level.into(), strategy.into(), window_bits.into())?;
     stream.reserve(max_size.get().unwrap_or(data.len() / 2));
     let max_size = max_size.as_atomic_usize();
+    if level == 9 {
+    }
     // max size is generally checked after each split,
     // so splitting the buffer into pieces gives more checks
     // = better chance of hitting it sooner.

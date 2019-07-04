@@ -494,8 +494,7 @@ fn optimize_png(
     let mut filter = opts.filter.iter().cloned().collect::<Vec<u8>>();
     let compression = &opts.compression;
     let mut strategies = opts.strategies.clone();
-
-    if opts.use_heuristics {
+    if true {//opts.use_heuristics {
         // Heuristically determine which set of options to use
         if png.raw.ihdr.bit_depth.as_u8() >= 8
             && png.raw.ihdr.color_type != colors::ColorType::Indexed
@@ -516,6 +515,10 @@ fn optimize_png(
         }
     }
 
+	filter.push(1);
+filter.push(2);
+filter.push(3);
+filter.push(4);
     // This will collect all versions of images and pick one that compresses best
     let eval = Evaluator::new(deadline.clone());
     // Usually we want transformations that are smaller than the unmodified original,
@@ -584,9 +587,29 @@ fn optimize_png(
         let added_interlacing = opts.interlace == Some(1) && original_png.raw.ihdr.interlaced == 0;
 
         let best_size = AtomicMin::new(if opts.force { None } else { Some(original_len) });
+        let best_size2 = AtomicMin::new(None);
         let results_iter = results.into_par_iter().with_max_len(1);
-        let best = results_iter.filter_map(|trial| {
-            if deadline.passed() {
+        let mut best_filter = 0;
+	let mut filter_min : usize = usize::max_value();
+	for f in &filter {
+                let filtered = &filters[f];
+            let new_idat = 
+		deflate::deflate(
+                    filtered,
+                    1,
+                    0,
+                    opts.window,
+                    &best_size2,
+                    &deadline,
+                ).unwrap();
+            ;
+	    if(new_idat.len() < filter_min){
+		best_filter = *f;
+		filter_min = new_idat.len();
+	    }
+	}
+	let best = results_iter.filter_map(|trial| {
+            if deadline.passed() || trial.filter != best_filter {
                 return None;
             }
             let filtered = &filters[&trial.filter];
@@ -617,7 +640,11 @@ fn optimize_png(
 
             // update best size across all threads
             let new_size = new_idat.len();
-            best_size.set_min(new_size);
+            /*let val = atomicmin.get();
+	    if val.is_none || val.unwrap() > new_size {
+		best_filter = trial.filter;
+	    }*/
+	    best_size.set_min(new_size);
 
             if opts.verbosity == Some(1) {
                 eprintln!(

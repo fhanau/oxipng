@@ -98,7 +98,7 @@ impl Evaluator {
                 }
                 if let Ok(idat_data) = deflate::deflate(
                     &image.filter_image(filter),
-                    STD_COMPRESSION,
+                    1,//STD_COMPRESSION,
                     STD_STRATEGY,
                     STD_WINDOW,
                     &best_candidate_size,
