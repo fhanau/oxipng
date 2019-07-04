@@ -15,6 +15,7 @@ pub(crate) fn try_alpha_reductions(
     png: Arc<PngImage>,
     alphas: &HashSet<AlphaOptim>,
     eval: &Evaluator,
+    do_eval: bool,
 ) {
     assert!(!alphas.is_empty());
     let alphas = alphas.iter().collect::<Vec<_>>();
@@ -22,8 +23,21 @@ pub(crate) fn try_alpha_reductions(
     alphas_iter
         .filter_map(|&alpha| filtered_alpha_channel(&png, *alpha))
         .for_each(|image| eval.try_image(Arc::new(image), 0.99));
+    if do_eval && !filtered_alpha(&png).is_some() {
+	eval.try_image(png.clone(), 1.0);
+    }
 }
 
+pub fn filtered_alpha(png: &PngImage) -> Option<u32> {
+    match png.ihdr.color_type {
+        ColorType::RGBA | ColorType::GrayscaleAlpha => {
+            Some(1)
+        }
+        _ => {
+            None
+        }
+    }
+}
 pub fn filtered_alpha_channel(png: &PngImage, optim: AlphaOptim) -> Option<PngImage> {
     let (bpc, bpp) = match png.ihdr.color_type {
         ColorType::RGBA | ColorType::GrayscaleAlpha => {

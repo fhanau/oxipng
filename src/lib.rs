@@ -524,7 +524,7 @@ filter.push(4);
     // Usually we want transformations that are smaller than the unmodified original,
     // but if we're interlacing, we have to accept a possible file size increase.
     if opts.interlace.is_none() {
-        eval.set_baseline(png.raw.clone());
+        //eval.set_baseline(png.raw.clone());
     }
     perform_reductions(png.raw.clone(), opts, &deadline, &eval);
     let reduction_occurred = if let Some(result) = eval.get_result() {
@@ -603,13 +603,36 @@ filter.push(4);
                     &deadline,
                 ).unwrap();
             ;
-	    if(new_idat.len() < filter_min){
+	    if new_idat.len() < filter_min {
 		best_filter = *f;
 		filter_min = new_idat.len();
 	    }
 	}
-	let best = results_iter.filter_map(|trial| {
-            if deadline.passed() || trial.filter != best_filter {
+
+	let mut best_heavy_strategy = 0;
+	let mut str_min : usize = usize::max_value();
+	for s in &strategies {
+	    if *s > 1 {
+		continue;
+	    }
+            let filtered = &filters[&best_filter];
+            let new_idat =
+		deflate::deflate(
+                    filtered,
+                    5,
+                    *s,
+                    opts.window,
+                    &best_size2,
+                    &deadline,
+                ).unwrap();
+	    if new_idat.len() < str_min {
+		best_heavy_strategy = *s;
+		str_min = new_idat.len();
+	    }
+	}
+
+let best = results_iter.filter_map(|trial| {
+            if deadline.passed() || trial.filter != best_filter || (trial.strategy < 2 && trial.strategy != best_heavy_strategy) {
                 return None;
             }
             let filtered = &filters[&trial.filter];
@@ -748,67 +771,35 @@ fn perform_reductions(
     deadline: &Deadline,
     eval: &Evaluator,
 ) {
+    let mut do_eval = false;
     // must be done first to evaluate rest with the correct interlacing
     if let Some(interlacing) = opts.interlace {
         if let Some(reduced) = png.change_interlacing(interlacing) {
             png = Arc::new(reduced);
-            eval.try_image(png.clone(), 0.);
+	    do_eval = true;
         }
         if deadline.passed() {
             return;
         }
     }
 
-    if opts.palette_reduction {
-        if let Some(reduced) = reduced_palette(&png) {
-            png = Arc::new(reduced);
-            eval.try_image(png.clone(), 0.95);
-            if opts.verbosity == Some(1) {
-                report_reduction(&png);
-            }
-        }
-        if deadline.passed() {
-            return;
-        }
+    if let Some(reduced) = reduced_palette(&png) {
+	png = Arc::new(reduced);
+	do_eval = true;
     }
-
-    if opts.bit_depth_reduction {
-        if let Some(reduced) = reduce_bit_depth(&png, 1) {
-            let previous = png.clone();
-            let bits = reduced.ihdr.bit_depth;
-            png = Arc::new(reduced);
-            eval.try_image(png.clone(), 1.0);
-            if (bits == BitDepth::One || bits == BitDepth::Two)
-                && previous.ihdr.bit_depth != BitDepth::Four
-            {
-                // Also try 16-color mode for all lower bits images, since that may compress better
-                if let Some(reduced) = reduce_bit_depth(&previous, 4) {
-                    eval.try_image(Arc::new(reduced), 0.98);
-                }
-            }
-            if opts.verbosity == Some(1) {
-                report_reduction(&png);
-            }
-        }
-        if deadline.passed() {
-            return;
-        }
+    if let Some(reduced) = reduce_bit_depth(&png, 1) {
+	png = Arc::new(reduced);
+	do_eval = true;
     }
-
-    if opts.color_type_reduction {
-        if let Some(reduced) = reduce_color_type(&png) {
-            png = Arc::new(reduced);
-            eval.try_image(png.clone(), 0.96);
-            if opts.verbosity == Some(1) {
-                report_reduction(&png);
-            }
-        }
-        if deadline.passed() {
-            return;
-        }
+    if let Some(reduced) = reduce_color_type(&png) {
+	png = Arc::new(reduced);
+	do_eval = true;
     }
+    /*if do_eval {
+	eval.try_image(png.clone(), 1.0);
+    }*/
 
-    try_alpha_reductions(png, &opts.alphas, eval);
+    try_alpha_reductions(png, &opts.alphas, eval, do_eval);
 }
 
 /// Keep track of processing timeout
