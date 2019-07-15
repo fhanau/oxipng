@@ -26,6 +26,7 @@ pub(crate) fn cfzlib_deflate(
     stream.reserve(max_size.get().unwrap_or(data.len() / 2));
     let max_size = max_size.as_atomic_usize();
     if level == 9 {
+        //stream.tune();
     }
     // max size is generally checked after each split,
     // so splitting the buffer into pieces gives more checks

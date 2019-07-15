@@ -783,6 +783,13 @@ fn perform_reductions(
         }
     }
 
+    pub(crate) use crate::alpha::filtered_alpha_channel;
+    use crate::colors::AlphaOptim;
+    if let Some(reduced) = filtered_alpha_channel(&png, AlphaOptim::Black) {
+        png = Arc::new(reduced);
+        do_eval = true;
+    }
+
     if let Some(reduced) = reduced_palette(&png) {
 	png = Arc::new(reduced);
 	do_eval = true;

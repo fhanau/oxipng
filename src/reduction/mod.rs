@@ -31,7 +31,7 @@ pub fn reduced_palette(png: &PngImage) -> Option<PngImage> {
     }
 
     let mut palette_map = [None; 256];
-    let mut used = [false; 256];
+    let mut used = [0; 256];
     {
         let palette = png.palette.as_ref()?;
 
@@ -40,21 +40,21 @@ pub fn reduced_palette(png: &PngImage) -> Option<PngImage> {
             match png.ihdr.bit_depth {
                 BitDepth::Eight => {
                     for &byte in line.data {
-                        used[byte as usize] = true;
+                        used[byte as usize] += 1;
                     }
                 }
                 BitDepth::Four => {
                     for &byte in line.data {
-                        used[(byte & 0x0F) as usize] = true;
-                        used[(byte >> 4) as usize] = true;
+                        used[(byte & 0x0F) as usize] += 1;
+                        used[(byte >> 4) as usize] += 1;
                     }
                 }
                 BitDepth::Two => {
                     for &byte in line.data {
-                        used[(byte & 0x03) as usize] = true;
-                        used[((byte >> 2) & 0x03) as usize] = true;
-                        used[((byte >> 4) & 0x03) as usize] = true;
-                        used[(byte >> 6) as usize] = true;
+                        used[(byte & 0x03) as usize] += 1;
+                        used[((byte >> 2) & 0x03) as usize] += 1;
+                        used[((byte >> 4) & 0x03) as usize] += 1;
+                        used[(byte >> 6) as usize] += 1;
                     }
                 }
                 _ => unreachable!(),
@@ -63,9 +63,65 @@ pub fn reduced_palette(png: &PngImage) -> Option<PngImage> {
 
         let mut next_index = 0u16;
         let mut seen = HashMap::with_capacity(palette.len());
-        for (i, (used, palette_map)) in used.iter().cloned().zip(palette_map.iter_mut()).enumerate()
+
+        let mut used_tuple = [(0,0); 256];
+        for (i, count) in used.iter().enumerate() {
+            //eprintln!("{}: {}", i, *count);
+            used_tuple[i] = (i, *count);
+        }
+
+        //Wrong direction?
+        
+        //used_tuple.sort_by(|a, b| a.1.cmp(&b.1));
+
+        used_tuple.sort_by(|a, b| {
+            let color_a = palette.get(a.0).cloned().unwrap_or_else(|| RGBA8::new(0, 0, 0, 255));
+            let color_b = palette.get(b.0).cloned().unwrap_or_else(|| RGBA8::new(0, 0, 0, 255));
+            let mut sum_a : i32 = 0;
+            sum_a += color_a.r as i32;
+            sum_a += color_a.g as i32;
+            sum_a += color_a.b as i32;
+            sum_a += (color_a.a) as i32 * 1024;
+
+            let mut sum_b : i32 = 0;
+            sum_b += color_b.r as i32;
+            sum_b += color_b.g as i32;
+            sum_b += color_b.b as i32;
+            sum_b += (color_b.a) as i32 * 1024;
+
+            sum_a = -sum_a;
+            sum_b = -sum_b;
+            //let sum_a = color_a.r + color_a.g + color_a.b + color_a.a * 1024;
+            //let sum_b = color_b.r + color_b.g + color_b.b + color_b.a * 1024;
+            sum_a.cmp(&sum_b)
+        });
+        for (i, used) in used_tuple.iter().cloned() {
+            if used == 0 {
+                continue;
+            }
+            // There are invalid files that use pixel indices beyond palette size
+            let mut color = palette
+                .get(i)
+                .cloned()
+                .unwrap_or_else(|| RGBA8::new(0, 0, 0, 255));
+            if color.a == 0 {
+                color = RGBA8::new(0, 0, 0, 0);
+            }
+            match seen.entry(color) {
+                Vacant(new) => {
+                    palette_map[i] = Some(next_index as u8);
+                    new.insert(next_index as u8);
+                    next_index += 1;
+                }
+                Occupied(remap_to) => {
+                    palette_map[i] = Some(*remap_to.get());
+                }
+            }
+        }
+
+        /*for (i, (used, palette_map)) in used.iter().cloned().zip(palette_map.iter_mut()).enumerate()
         {
-            if !used {
+            if used == 0 {
                 continue;
             }
             // There are invalid files that use pixel indices beyond palette size
@@ -83,7 +139,7 @@ pub fn reduced_palette(png: &PngImage) -> Option<PngImage> {
                     *palette_map = Some(*remap_to.get());
                 }
             }
-        }
+        }*/
     }
 
     do_palette_reduction(png, &palette_map)

@@ -50,7 +50,8 @@ optional = true
 version = "2.0.0"
 
 [target.'cfg(any(target_arch = "x86_64", target_arch = "aarch64"))'.dependencies]
-cloudflare-zlib = "^0.2.2"
+cloudflare-zlib = {path = "./cloudflare-zlib"}
+#cloudflare-zlib = "^0.2.2"
 
 [dependencies.image]
 default-features = false
