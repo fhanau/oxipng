@@ -136,7 +136,7 @@ pub struct Options {
     ///
     /// Default: `Some(0)`
     pub verbosity: Option<u8>,
-    /// Which filters to try on the file (0-5)
+    /// Which filters to try on the file (0-7)
     ///
     /// Default: `0,5`
     pub filter: HashSet<u8>,

@@ -309,6 +309,7 @@ impl PngImage {
         let bpp = ((self.ihdr.bit_depth.as_u8() * self.channels_per_pixel() + 7) / 8) as usize;
         let mut last_line: &[u8] = &[];
         let mut last_pass: Option<u8> = None;
+        let mut prev_filter = 6;
         for line in self.scan_lines() {
             match filter {
                 0 | 1 | 2 | 3 | 4 => {
@@ -320,25 +321,57 @@ impl PngImage {
                     filtered.push(filter);
                     filtered.extend_from_slice(&filter_line(filter, bpp, &line.data, last_line));
                 }
-                5 => {
-                    // Heuristically guess best filter per line
-                    // Uses MSAD algorithm mentioned in libpng reference docs
-                    // http://www.libpng.org/pub/png/book/chapter09.html
+                5 | 6 | 7 => {
                     let mut trials: Vec<(u8, Vec<u8>)> = Vec::with_capacity(5);
                     // Avoid vertical filtering on first line of each interlacing pass
                     for filter in if last_pass == line.pass { 0..5 } else { 0..2 } {
                         trials.push((filter, filter_line(filter, bpp, &line.data, last_line)));
                     }
+                    let mut f = 0;
                     let (best_filter, best_line) = trials
                         .iter()
                         .min_by_key(|(_, line)| {
-                            line.iter().fold(0u64, |acc, &x| {
-                                let signed = x as i8;
-                                acc + i16::from(signed).abs() as u64
-                            })
+                            match filter {
+                                5 => {
+                                    // Heuristically guess best filter per line
+                                    // Uses MSAD algorithm mentioned in libpng reference docs
+                                    // http://www.libpng.org/pub/png/book/chapter09.html
+                                    line.iter().fold(0u64, |acc, &x| {
+                                        let signed = x as i8;
+                                        acc + i16::from(signed).abs() as u64
+                                    })
+                                }
+                                6 => {
+                                    // Use number of distinct bigrams to guess filter
+                                    // Based on research at http://bjoern.hoehrmann.de/pngwolf/
+                                    let mut bigrams = [0u16; 1 << 16];
+                                    for bigram in line.windows(2) {
+                                        let idx = 256usize * (bigram[0] as usize) + (bigram[1] as usize);
+                                        bigrams[idx] = 1;
+                                    }
+                                    let mut sum = bigrams.iter().sum::<u16>() as u64;
+                                    //TODO: Add a slight bias in favor of the previous strategy.
+                                    //Experimental.
+                                    if f != prev_filter {
+                                        sum += (line.len() / 100) as u64;
+                                    }
+                                    f+=1;
+                                    sum
+                                }
+                                7 => {
+                                    // Use number of distinct bytes to guess filter
+                                    let mut distinct_b = vec!(0; 256);
+                                    for &val in line.iter() {
+                                        distinct_b[val as usize] = 1;
+                                    }
+                                    distinct_b.iter().sum()
+                                }
+                                _ => unreachable!(),
+                            }
                         })
                         .unwrap();
                     filtered.push(*best_filter);
+                    prev_filter = *best_filter;
                     filtered.extend_from_slice(best_line);
                 }
                 _ => unreachable!(),

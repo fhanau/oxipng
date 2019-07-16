@@ -115,12 +115,12 @@ fn main() {
             .long("quiet")
             .conflicts_with("verbose"))
         .arg(Arg::with_name("filters")
-            .help("PNG delta filters (0-5) - Default: 0,5")
+            .help("PNG delta filters (0-7) - Default: 0,5")
             .short("f")
             .long("filters")
             .takes_value(true)
             .validator(|x| {
-                match parse_numeric_range_opts(&x, 0, 5) {
+                match parse_numeric_range_opts(&x, 0, 7) {
                     Ok(_) => Ok(()),
                     Err(_) => Err("Invalid option for filters".to_owned()),
                 }
@@ -306,7 +306,7 @@ fn parse_opts_into_struct(
     }
 
     if let Some(x) = matches.value_of("filters") {
-        opts.filter = parse_numeric_range_opts(x, 0, 5).unwrap();
+        opts.filter = parse_numeric_range_opts(x, 0, 7).unwrap();
     }
 
     if let Some(x) = matches.value_of("compression") {
